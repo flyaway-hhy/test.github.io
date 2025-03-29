@@ -1,1 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课堂发言系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.1.2/src/wordcloud2.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background-color: #f5f7fa;
+            padding: 20px;
+            transition: all 0.5s ease;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 28px;
+        }
+        
+        .status {
+            background-color: #e1f5fe;
+            color: #0288d1;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #0288d1;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+        
+        .comments-container {
+            min-height: calc(100vh - 200px);
+            margin-bottom: 80px;
+        }
+        
+        .comment-bubble {
+            display: flex;
+            margin-bottom: 25px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        
+        .comment-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            overflow: hidden;
+            margin-right: 15px;
+            flex-shrink: 0;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .question-container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .question-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .question-content {
+            color: #34495e;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        .question-image {
+            width: 100%;
+            max-width: 600px;
+            border-radius: 8px;
+            margin: 0 auto 20px;
+            display: block;
+        }
+        
+        /* 开始提问按钮样式 */
+        .start-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 180px; /* 位于生成词云按钮左侧 */
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        .start-btn:hover {
+            background-color: #219653;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+        }
+        
+        .start-btn:active {
+            transform: translateY(0);
+        }
 
+        .comment-content {
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 18px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            position: relative;
+            max-width: 80%;
+        }
+        
+        .comment-content::before {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 15px;
+            border-width: 10px 10px 10px 0;
+            border-style: solid;
+            border-color: transparent #fff transparent transparent;
+        }
+        
+        .student-name {
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .comment-text {
+            color: #34495e;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+
+        .comment-image {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+            max-height: 200px;
+        }
+        
+        .student-id {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-left: 5px;
+            font-weight: normal;
+        }
+        
+        /* 添加时间样式 */
+        .comment-time {
+            font-size: 12px;
+            color: #95a5a6;
+            text-align: right;
+            margin-top: 8px;
+        }
+        
+        /* 修改词云容器样式以适应更大的词云 */
+        .word-cloud-container canvas {
+            max-width: 95%;
+            max-height: 95%;
+        }
+    
+        .generate-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        .generate-btn:hover {
+            background-color: #2980b9;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+        
+        .generate-btn:active {
+            transform: translateY(0);
+        }
+        
+        .word-cloud-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #fff;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            padding: 20px;
+        }
+        
+        .word-cloud-container.active {
+            display: flex;
+        }
+        
+        .word-cloud {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><path d="M400,90 C500,60 650,100 680,200 C710,300 650,400 600,450 C550,500 500,520 400,510 C300,520 250,500 200,450 C150,400 90,300 120,200 C150,100 300,60 400,90 Z" fill="none" /></svg>');
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .word-cloud-word {
+            position: absolute;
+            font-weight: bold;
+            transform-origin: center;
+            transition: all 0.3s ease;
+        }
+        
+        /* 添加云朵形状的样式 */
+        .cloud-shape {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* 添加词云容器的过渡效果 */
+        .word-cloud-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f5f7fa;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            padding: 20px;
+            transition: opacity 0.5s ease;
+        }
+        
+        .word-cloud-container.active {
+            display: flex;
+            opacity: 1;
+        }
+        
+        /* 添加词云标题 */
+        .word-cloud-title {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 24px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 300;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .back-btn:hover {
+            background-color: #c0392b;
+        }
+        
+        /* 不同学生的气泡样式 */
+        .comment-bubble:nth-child(odd) .comment-content {
+            background-color: #e8f4fd;
+        }
+        
+        .comment-bubble:nth-child(odd) .comment-content::before {
+            border-color: transparent #e8f4fd transparent transparent;
+        }
+        
+        .comment-bubble:nth-child(3n) .student-name {
+            color: #9b59b6;
+        }
+        
+        .comment-bubble:nth-child(3n+1) .student-name {
+            color: #2ecc71;
+        }
+        
+        .comment-bubble:nth-child(3n+2) .student-name {
+            color: #e67e22;
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            color: #7f8c8d;
+            margin-right: 15px;
+        }
+        
+        .loading-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(52, 152, 219, 0.3);
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+
+        .waiting-message {
+            text-align: center;
+            padding: 30px;
+            font-size: 18px;
+            color: #7f8c8d;
+            margin: 50px 0;
+        }
+
+        .process-container {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #3498db;
+        }
+        
+        .rsgpt-hint {
+            color: #3498db;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            
+        }
+
+        .process-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .process-title::before {
+            content: "";
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background-color: #3498db;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .process-step {
+            margin-bottom: 15px;
+        }
+        
+        .step-title {
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .step-content {
+            color: #34495e;
+            line-height: 1.6;
+            padding-left: 15px;
+            border-left: 2px solid #ecf0f1;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #commentsContainer {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>课堂发言系统</h1>
+            <div class="status">
+                <div class="status-dot"></div>
+                <span>实时记录中</span>
+            </div>
+        </header>
+        
+        <div class="question-container" id="questionContainer">
+            <div class="question-title">今日课堂问题：</div>
+            <div class="question-content">
+                请分析人工智能在教育领域的应用前景和可能带来的挑战。考虑以下几个方面：个性化学习、教师角色转变、教育资源分配以及伦理问题。你认为AI将如何改变未来的教育模式？
+            </div> 
+        </div>
+
+        <div class="comments-container" id="commentsContainer">
+            <!-- 学生发言将在这里动态生成 -->
+        </div>
+
+        <div class="process-container" id="processContainer">
+            <div class="rsgpt-hint">RSGPT提示:</div>
+            <div class="process-title">传统模式识别的处理过程</div>
+            
+            <div class="process-step">
+                <div class="step-title">数据采集</div>
+                <div class="step-content">通过传感器、数据库或人工收集原始数据，为后续分析提供输入。</div>
+            </div>
+            
+            <div class="process-step">
+                <div class="step-title">预处理</div>
+                <div class="step-content">对原始数据进行去噪、归一化或增强等操作，提升数据质量。</div>
+            </div>
+            
+            <div class="process-step">
+                <div class="step-title">特征提取</div>
+                <div class="step-content">从预处理后的数据中提取关键特征，降低维度并保留判别性信息。</div>
+            </div>
+            
+            <div class="process-step">
+                <div class="step-title">分类或聚类</div>
+                <div class="step-content">分类：根据已有标签数据划分到预定义类别（监督学习）；<br>聚类：基于相似性将数据分组，无需先验标签（无监督学习）。</div>
+            </div>
+            
+            <div class="process-step">
+                <div class="step-title">后处理</div>
+                <div class="step-content">对分类/聚类结果进行优化（如平滑、纠错或融合多模型输出），提高最终决策的准确性。</div>
+            </div>
+        </div>
+    </div>
+    
+    <button class="start-btn" id="startBtn">开始提问</button>
+    <button class="generate-btn" id="generateBtn">生成词云</button>
+    
+    <div class="word-cloud-container" id="wordCloudContainer">
+        <canvas id="wordCloudCanvas" width="800" height="600"></canvas>
+        <button class="back-btn" id="backBtn">返回发言页面</button>
+    </div>
+    
+    <script>
+        // 模拟学生数据
+        const students = [
+            { id: "2023302131134", name: "汪新悦", avatar: "avatars/1.jpg" },
+            { id: "2023302131309", name: "吕文威", avatar: "avatars/2.jpg" },
+            { id: "2023302131026", name: "何思源", avatar: "avatars/3.jpg" },
+            { id: "2023302131071", name: "陈雨楠", avatar: "avatars/4.jpg" },
+            { id: "2023302131284", name: "李欣怡", avatar: "avatars/5.jpg" },
+            { id: "2023302131326", name: "苏靖茹", avatar: "avatars/6.jpg" },
+            { id: "2023312131002", name: "孔靖慇", avatar: "avatars/7.jpg" },
+            { id: "2023302131050", name: "曹子涛", avatar: "avatars/8.jpg" },
+            { id: "2023302131142", name: "杨恩", avatar: "avatars/9.jpg" },
+            { id: "2023302131151", name: "周明坤", avatar: "avatars/10.jpg" },
+            { id: "2023302131172", name: "牛仕博", avatar: "avatars/11.jpg" },
+            { id: "2023302131196", name: "成子莹", avatar: "avatars/12.jpg" },
+            { id: "2023302131235", name: "曾泓源", avatar: "avatars/13.jpg" },
+            { id: "2023302131299", name: "周帅", avatar: "avatars/14.jpg" },
+            { id: "2023302131328", name: "赵依晗", avatar: "avatars/15.jpg" },
+            { id: "2023302131068", name: "桑浩明", avatar: "avatars/16.jpg" },
+            { id: "2023302131081", name: "许安然", avatar: "avatars/17.jpg" },
+            { id: "2023302131115", name: "徐豪", avatar: "avatars/18.jpg" },
+            { id: "2023302131195", name: "张馨怡", avatar: "avatars/19.jpg" },
+            { id: "2023302131211", name: "文诗语", avatar: "avatars/20.jpg" }
+        ];
+        
+        // 模拟学生发言内容
+        const comments = [
+            "我认为这个问题的关键在于理解基本概念。",
+            "老师，我想补充一点，这个理论在实际应用中可能会遇到一些挑战。",
+            "从另一个角度来看，我们可以考虑使用不同的方法解决这个问题。",
+            "这个概念让我想到了我们上节课学习的内容，它们之间有什么联系吗？",
+            "我觉得这个例子非常好，它帮助我更好地理解了这个复杂的概念。",
+            "我有一个问题，为什么我们不能用另一种方式来解释这个现象？",
+            "这个理论的历史背景是什么？它是如何发展起来的？",
+            "我认为这个观点有一定的局限性，我们应该考虑更多的因素。",
+            "这个公式看起来很复杂，但如果我们分步骤来看，其实很容易理解。",
+            "我想知道这个理论在实际生活中有哪些应用？",
+            "我觉得这个问题可以从多个维度来分析，不仅仅是我们现在讨论的这一个。",
+            "老师，我可以尝试用自己的话来解释一下这个概念吗？",
+            "这个实验结果与我们的预期有些不同，这说明了什么？",
+            "我认为小组合作对解决这类问题非常重要，因为它需要多种技能。",
+            "这个案例研究给了我很多启发，特别是关于如何应用理论知识。",
+            "我想分享一个相关的例子，这可能有助于我们更好地理解这个概念。",
+            "我们是否可以将这个理论与我们之前学过的其他理论结合起来？",
+            "这个问题让我思考了很多，我认为答案并不是唯一的。",
+            "我发现这个概念与我们日常生活中的许多现象都有联系。",
+            "我觉得我们需要更多的数据来支持这个结论。"
+        ];
+        
+        const commentImages = [
+            "https://img.freepik.com/free-vector/ai-education-concept-illustration_114360-7917.jpg",
+            "https://img.freepik.com/free-vector/ai-technology-brain-background-vector-digital-transformation-concept_53876-117812.jpg",
+            "https://img.freepik.com/free-vector/artificial-intelligence-concept-landing-page_52683-24662.jpg",
+            "https://img.freepik.com/free-vector/futuristic-ai-technology-template-vector-disruptive-technology-blog-banner_53876-117833.jpg",
+            "https://img.freepik.com/free-vector/artificial-intelligence-isometric-composition-with-view-human-head-profile-with-brain-image-inside_1284-63536.jpg"
+        ];
+
+        const commentsContainer = document.getElementById('commentsContainer');
+        const startBtn = document.getElementById('startBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const wordCloudContainer = document.getElementById('wordCloudContainer');
+        const backBtn = document.getElementById('backBtn');
+        
+        // 生成学生发言 - 修改为按顺序生成而非随机
+        let currentStudentIndex = 0;
+        let currentCommentIndex = 0;
+        
+        function generateNextComment() {
+            const student = students[currentStudentIndex];
+            const comment = comments[currentCommentIndex];
+            
+            // 更新索引，循环使用学生和评论
+            currentStudentIndex = (currentStudentIndex + 1) % students.length;
+            currentCommentIndex = (currentCommentIndex + 1) % comments.length;
+            
+            // 约20%的评论有图片
+            const hasImage = Math.random() < 0.2;
+            
+            return {
+                id: student.id,
+                name: student.name,
+                avatar: student.avatar,
+                text: comment,
+                time: getCurrentTime(),
+            };
+        }
+        
+        // 获取当前时间的函数
+        function getCurrentTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+        
+        // 创建学生发言气泡 - 修改为在顶部添加新气泡，并显示学号和时间
+        function createCommentBubble(comment) {
+            const bubble = document.createElement('div');
+            bubble.className = 'comment-bubble';
+            
+            let imageHtml = '';
+            if (comment.image) {
+                imageHtml = `<img src="${comment.image}" alt="评论图片" class="comment-image">`;
+            }
+            
+            bubble.innerHTML = `
+                <div class="avatar">
+                    <img src="${comment.avatar}" alt="${comment.name}">
+                </div>
+                <div class="comment-content">
+                    <div class="student-name">${comment.name} <span class="student-id">${comment.id}</span></div>
+                    <div class="comment-text">${comment.text}</div>
+                    ${imageHtml}
+                    <div class="comment-time">${comment.time}</div>
+                </div>
+            `;
+            
+            // 将新气泡添加到容器的顶部
+            if (commentsContainer.firstChild) {
+                commentsContainer.insertBefore(bubble, commentsContainer.firstChild);
+            } else {
+                commentsContainer.appendChild(bubble);
+            }
+            
+            // 触发重排以应用动画
+            setTimeout(() => {
+                bubble.classList.add('visible');
+            }, 50);
+        }
+        
+        // 词云数据 - 添加权重表示频率
+        const wordCloudWords = [
+            // 三个核心问题（最大权重）
+            {text: "数据处理能力弱", weight: 15},
+            {text: "依赖性强", weight: 14},
+            {text: "模型调优复杂", weight: 13},
+            
+            // 特征工程相关
+            {text: "特征工程", weight: 8},
+            {text: "人工设计特征", weight: 9},
+            {text: "特征提取", weight: 9},
+            {text: "特征组合", weight: 7},
+            
+            // 模型缺陷
+            {text: "泛化能力差", weight: 10},
+            {text: "性能上限", weight: 9},
+            {text: "过拟合", weight: 9},
+            {text: "欠拟合", weight: 8},
+            
+            // 实施难点
+            {text: "计算开销大", weight: 7},
+            {text: "参数调整耗时", weight: 9},
+            {text: "数据分布复杂", weight: 8},
+            {text: "高维数据处理", weight: 7},
+            
+            // 技术依赖
+            {text: "领域专家", weight: 9},
+            {text: "手动调整", weight: 8},
+            {text: "传统方法局限", weight: 7},
+            {text: "层级特征缺失", weight: 6},
+            
+            // 扩展补充
+            {text: "优化算法局限", weight: 5},
+            {text: "图像分辨率挑战", weight: 5},
+            {text: "自适应能力弱", weight: 4},
+            {text: "质量迭代瓶颈", weight: 3}
+        ];
+        
+        // 生成词云 - 修改为更大的尺寸
+        function generateWordCloud() {
+            const wordCloudCanvas = document.getElementById('wordCloudCanvas');
+            // 增加画布尺寸
+            wordCloudCanvas.width = 1200;
+            wordCloudCanvas.height = 900;
+            
+            const list = wordCloudWords.map(item => [item.text, item.weight]);
+
+            WordCloud(wordCloudCanvas, {
+                list: list,
+                gridSize: 10,
+                weightFactor: function (size) {
+                    return 18 + size * 5;  // 进一步增加字体大小
+                },
+                fontFamily: 'Microsoft YaHei',
+                color: 'random-dark',
+                rotateRatio: 0,  // 禁止旋转
+                shape: 'cloud',  // 保持云朵形状
+                backgroundColor: '#f5f7fa',
+                drawOutOfBound: false,
+            });
+        }
+
+        
+        // 开始模拟学生发言
+        function startCommentSimulation() {
+            // 生成20个学生发言
+            let count = 0;
+            const totalComments = 20;
+            
+            function addNextComment() {
+                if (count < totalComments) {
+                    const comment = generateNextComment();
+                    createCommentBubble(comment);
+                    count++;
+                    
+                    // 随机时间间隔添加下一条发言
+                    setTimeout(addNextComment, 800 + Math.random() * 1200);
+                }
+            }
+            
+            addNextComment();
+        }
+        
+        // 修改开始提问按钮点击事件，切换显示内容
+        startBtn.addEventListener('click', function() {
+            // 禁用按钮，防止重复点击
+            startBtn.disabled = true;
+            startBtn.textContent = '提问中...';
+            
+            // 立即隐藏问题容器和处理流程容器，显示评论容器
+            document.getElementById('questionContainer').style.display = 'none';
+            document.getElementById('processContainer').style.display = 'none';
+            document.getElementById('commentsContainer').style.display = 'block';
+            
+            // 添加等待消息
+            const waitingMessage = document.createElement('div');
+            waitingMessage.className = 'waiting-message';
+            waitingMessage.innerHTML = '正在等待学生发言...<div class="loading-spinner" style="display: inline-block; margin-left: 15px;"></div>';
+            commentsContainer.appendChild(waitingMessage);
+            
+            // 5秒后开始显示学生发言
+            setTimeout(function() {
+                // 移除等待消息
+                commentsContainer.removeChild(waitingMessage);
+                
+                // 开始显示学生发言
+                startCommentSimulation();
+                startBtn.style.display = 'none'; // 隐藏按钮
+            }, 5000);
+        });
+        
+        // 生成词云按钮点击事件
+        generateBtn.addEventListener('click', () => {
+            generateWordCloud();
+            wordCloudContainer.classList.add('active');
+        });
+        
+        // 返回按钮点击事件
+        backBtn.addEventListener('click', () => {
+            wordCloudContainer.classList.remove('active');
+        });
+    </script>
+</body>
+</html>
